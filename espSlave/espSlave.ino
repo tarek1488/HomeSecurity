@@ -25,9 +25,14 @@ bool signupOK = false;
 HardwareSerial tivacSerial(2);
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
-// Shared buffer & mutex
+// Shared buffer & mutex for lcd and uart recieve and firebase upload
 char sharedMessage[64] = "";
 SemaphoreHandle_t msgMutex;
+
+// // shared buffer & mutex for uart send to tiva c task and read from firebase
+// char activationValue[32] = "";
+// SemaphoreHandle_t activationMutex;
+
 
 // === Wi-Fi Connect ===
 void ConnectToWiFi() {
@@ -129,6 +134,43 @@ void TaskLCD(void *pvParameters) {
   }
 }
 
+// === Task: Read activation from Firebase and send to Tiva ===
+void TaskFirebaseReadAndSend(void *pvParameters) {
+  char activationChar;
+
+  while (1) {
+    if (Firebase.RTDB.getString(&fbdo, "/Activation")) {
+      String value = fbdo.stringData();
+
+      // Determine the character to send
+      if (value == "ON") {
+        //activationChar = "A\n";
+        tivacSerial.print("A\n");
+      } else if (value == "OFF") {
+        //activationChar = "B\n";
+        tivacSerial.print("B\n");
+      }
+      
+
+      // Send to Tiva with \r\n
+      //tivacSerial.print(activationChar);
+      //tivacSerial.print("\r\n");
+
+      Serial.print("[Firebase] Activation: ");
+      Serial.println(value);
+      //Serial.print("[UART -> Tiva] Sent: ");
+      //Serial.println(activationChar);
+    } else {
+      Serial.println("[Firebase] Read failed");
+    }
+
+    vTaskDelay(2000 / portTICK_PERIOD_MS);  // Every 1 seconds
+  }
+}
+
+
+
+
 // === Setup ===
 void setup() {
   Serial.begin(115200);
@@ -143,11 +185,18 @@ void setup() {
   FirebaseInit();
 
   msgMutex = xSemaphoreCreateMutex();
+  //activationMutex = xSemaphoreCreateMutex();
+
+  
+
 
   // Core 1 for tasks
   xTaskCreatePinnedToCore(TaskReadUART, "UART", 8192, NULL, 3, NULL, 1);
   xTaskCreatePinnedToCore(TaskFirebase, "Firebase", 8192, NULL, 2, NULL, 1);
   xTaskCreatePinnedToCore(TaskLCD, "LCD", 4096, NULL, 1, NULL, 1);
+
+  xTaskCreatePinnedToCore(TaskFirebaseReadAndSend, "FirebaseReadSend", 8192, NULL, 1, NULL, 1);
+
 }
 
 void loop() {

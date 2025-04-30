@@ -48,6 +48,7 @@ int main(void) {
 
 	while (1) {
 		
+		
 		//Reading sound sensor
 		sound_alert = (GPIO_PORTD_DATA_R & (1<<3)) ? 1 : 0;
 		
@@ -57,33 +58,52 @@ int main(void) {
 		//Both alert happens
 		home_alert = sound_alert & motion_alert;
 		//sound_alert = 1;
-		if(sound_alert){
-			UART3_OutString("Sound Detected  \r\n");
-			GPIO_PORTF_DATA_R |= (1 << 3); // Turn ON Green LED
-			GPIO_PORTD_DATA_R |= (1 << 1);
-			delay_seconds(4);
+		
+		//Reading activation value from esp
+		char activation = UART3_Receiver();
+		GPIO_PORTF_DATA_R = 0x02;
+		
+		if (activation == 'A'){
+			GPIO_PORTF_DATA_R = 0x04;
+			if(sound_alert){
+				UART3_OutString("Sound Detected  \r\n");
+				GPIO_PORTF_DATA_R |= (1 << 3); // Turn ON Green LED
+				GPIO_PORTD_DATA_R |= (1 << 1);
+				delay_seconds(4);
+			}
+			else if(motion_alert){
+				UART3_OutString("Motion Detected \r\n");
+				GPIO_PORTF_DATA_R |= (1 << 3); // Turn ON Green LED
+				GPIO_PORTD_DATA_R |= (1 << 1);
+				delay_seconds(4);
+				
+			}
+			else if(home_alert){
+				UART3_OutString("Home Unsecure   \r\n");
+				GPIO_PORTF_DATA_R |= (1 << 3); // Turn ON Green LED
+				delay_seconds(4);
+			}
+			else{
+				UART3_OutString("Home is Safe    \r\n");
+				GPIO_PORTF_DATA_R &= ~(1 << 3);          // Turn OFF Green LED
+				GPIO_PORTD_DATA_R &= ~(1 << 1);
+				delay_seconds(4);
+			}
+			delay_seconds(1);
 		}
-		else if(motion_alert){
-			UART3_OutString("Motion Detected \r\n");
-			GPIO_PORTF_DATA_R |= (1 << 3); // Turn ON Green LED
-			GPIO_PORTD_DATA_R |= (1 << 1);
-			delay_seconds(4);
-			
-		}
-		else if(home_alert){
-			UART3_OutString("Home Unsecure   \r\n");
-			GPIO_PORTF_DATA_R |= (1 << 3); // Turn ON Green LED
-			delay_seconds(4);
+		else if (activation == 'B'){
+				UART3_OutString("System Off   \r\n");
+				GPIO_PORTF_DATA_R |= (1 << 3); // Turn ON Green LED
+				delay_seconds(2);
 		}
 		else{
-			UART3_OutString("Home is Safe    \r\n");
-			GPIO_PORTF_DATA_R &= ~(1 << 3);          // Turn OFF Green LED
-			GPIO_PORTD_DATA_R &= ~(1 << 1);
+			GPIO_PORTF_DATA_R == 0x0C; // Turn ON Green LED
+			//UART3_OutString("JUNK");
+			UART3_OutString(activation);
 			delay_seconds(4);
-		}
-		delay_seconds(1);
-		
-	}
+		}	
+	           
+    }
 }
 
 

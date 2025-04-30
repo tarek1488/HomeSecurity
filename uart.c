@@ -1,5 +1,6 @@
 #include "uart.h"
 
+
 void UART3_Init(void) {
     SYSCTL_RCGCUART_R |= (1 << 3);     // Enable UART3 clock
     SYSCTL_RCGCGPIO_R |= (1 << 2);      // Enable GPIOC clock
@@ -31,3 +32,28 @@ void UART3_OutString(const char* str) {
         UART3_OutChar(*str++);
     }
 }
+
+
+// === recieve a char using uart3 === 
+//char UART3_Receiver(void) {
+//    int32_t data = UARTCharGetNonBlocking(UART3_BASE);
+//    
+//    if (data != -1) {
+//        // Data received
+//        return (char)data;
+//    } else {
+//        // No data available
+//        return '\0';  // Return a special value or handle it accordingly
+//    }
+//}
+
+char UART3_Receiver(void)  
+{
+    char data;
+	  while((UART3->FR & (1<<4)) != 0); /* wait until Rx buffer is not full */
+    data = UART3->DR ;  	/* before giving it another byte */
+    return (unsigned char) data;
+}
+
+
+

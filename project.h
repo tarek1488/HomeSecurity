@@ -12,6 +12,7 @@
 #include <stdint.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <string.h>
 
 #include "inc/hw_i2c.h"
 #include "inc/hw_memmap.h"
