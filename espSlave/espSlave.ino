@@ -130,7 +130,7 @@ void TaskLCD(void *pvParameters) {
       digitalWrite(LED, LOW);
     }
 
-    vTaskDelay(100 / portTICK_PERIOD_MS);
+    vTaskDelay(300 / portTICK_PERIOD_MS);
   }
 }
 
@@ -164,7 +164,7 @@ void TaskFirebaseReadAndSend(void *pvParameters) {
       Serial.println("[Firebase] Read failed");
     }
 
-    vTaskDelay(2000 / portTICK_PERIOD_MS);  // Every 1 seconds
+    vTaskDelay(5000 / portTICK_PERIOD_MS);  // Every 1 seconds
   }
 }
 
