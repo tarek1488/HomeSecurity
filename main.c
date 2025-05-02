@@ -98,8 +98,8 @@ int main(void) {
 		}
 		else{
 			GPIO_PORTF_DATA_R == 0x0C; // Turn ON Green LED
-			//UART3_OutString("JUNK");
-			UART3_OutString(activation);
+			UART3_OutString("JUNK");
+			//UART3_OutString(activation);
 			delay_seconds(4);
 		}	
 	           
