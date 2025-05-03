@@ -9,7 +9,11 @@
 ///Helper 
 void delay_seconds(uint32_t seconds);
 
-// === Motion Sensor
+
+extern TaskHandle_t MotionHandle;
+extern TaskHandle_t SoundHandle;
+extern SemaphoreHandle_t xMotionSemaphore;
+extern SemaphoreHandle_t xSoundSemaphore;
 
 
 void MotionInterruptInit(void);
@@ -22,8 +26,3 @@ void SoundInterruptInit(void);
 void SoundSensor_ISR_Handler(void);
 void vSoundDetectedTask(void *pvParameters);
 void vHomeSafeTask(void *pvParameters);
-
-extern TaskHandle_t MotionHandle;
-extern TaskHandle_t SoundHandle;
-extern SemaphoreHandle_t xMotionSemaphore;
-extern SemaphoreHandle_t xSoundSemaphore;

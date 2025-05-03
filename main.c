@@ -23,6 +23,7 @@ void portD_init(void){
     GPIO_PORTD_DIR_R &= ~0x0C;        // PD2, PD3 as input
     GPIO_PORTD_DIR_R |= 0x03;         // PD0, PD1 as output (if needed)
     GPIO_PORTD_DEN_R |= 0x0F;         // Enable digital functions for PD0–PD3
+		GPIO_PORTD_PUR_R |= ((1 << 2) | (1 << 3));         // Pull-up resistor on PD2,3
 }
 //void vUARTTestTask(void *pvParameters) {
 //    while (1) {
@@ -34,10 +35,12 @@ void portD_init(void){
 //}
 
 int main(void) {
-	
 	UART3_Init();
 	PortF_Init();
 	portD_init();   // PD0–PD3 setup
+	//SoundInterruptInit();
+	//MotionInterruptInit();
+	//IntMasterEnable();
 	
 	xSoundSemaphore = xSemaphoreCreateBinary();
 	xMotionSemaphore = xSemaphoreCreateBinary();
@@ -45,10 +48,6 @@ int main(void) {
 //	vTaskStartScheduler();
 	
 	if ((xSoundSemaphore != NULL) && (xMotionSemaphore != NULL)){
-		
-
-		//xTaskCreate(vSoundDetectedTask, "Sound Detected", 1000, NULL, 1, &SoundHandle);
-		//xTaskCreate(vMotionDetectedTask, "Motion Detected", 1000, NULL, 1, &MotionHandle);
 		// Initialize semaphores, interrupts, etc.
     xTaskCreate(vHomeSafeTask, "HomeSafeTask", 1000, NULL, 1, NULL);
     xTaskCreate(vMotionDetectedTask, "MotionTask", 1000, NULL, 2, NULL);
