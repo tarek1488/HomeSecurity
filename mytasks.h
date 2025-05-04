@@ -1,19 +1,25 @@
+#ifndef MYTASKS_H
+#define MYTASKS_H
+
 #include "uart.h"
-#include <String.h>
 #include <FreeRTOS.h>
 #include <semphr.h>
-#include <timers.h>
 #include <task.h>
+#include <timers.h>
 
-extern SemaphoreHandle_t xMotionSemaphore;
-extern SemaphoreHandle_t xSoundSemaphore;
-extern volatile uint32_t motion_detected;
-extern volatile uint32_t sound_detected;
+typedef enum {
+    ALERT_NONE,
+    ALERT_MOTION,
+    ALERT_SOUND
+} AlertType;
 
-void vMotionDetectedTask(void *pvParameters);
-void vSoundDetectedTask(void *pvParameters);
+extern QueueHandle_t alertQueue;
+extern volatile BaseType_t motion_detected;
+extern volatile BaseType_t sound_detected;
+
+void vReadMotionSensorask(void *pvParameters);
+void vReadSoundSensorask(void *pvParameters);
+void vAlertRoutineTask(void *pvParameters);
 void vHomeSafeTask(void *pvParameters);
 
-void GPIOD_Handler2(void);
-void SensorInterruptInit(void);
-
+#endif

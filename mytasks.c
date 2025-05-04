@@ -1,89 +1,74 @@
 #include "mytasks.h"
 
-volatile uint32_t motion_detected=0;
-volatile uint32_t sound_detected=0;
 
-SemaphoreHandle_t xMotionSemaphore;
-SemaphoreHandle_t xSoundSemaphore;
 
-// Home Safe Task (Sends "Home is Safe" every 200ms)
-void vHomeSafeTask(void *pvParameters) {
-    while(1) {
-      if ((!motion_detected) && (!sound_detected)){   					
-				UART3_OutString("Home Is Safe\r\n");
-				GPIO_PORTF_DATA_R &= ~(1 << 3);  // Turn off the Green LED
-				GPIO_PORTD_DATA_R &= ~(1 << 1);  // Turn off the Buzzer				
+volatile BaseType_t motion_detected = pdFALSE;
+volatile BaseType_t sound_detected = pdFALSE;
+QueueHandle_t alertQueue;
+
+
+//=== Read PIR TASK ===
+void vReadMotionSensorask(void *pvParameters){
+	BaseType_t sensor_status; 
+	for(;;){
+		sensor_status = GPIO_PORTD_DATA_R & (1 << 2) ? pdTRUE : pdFALSE;
+		if(sensor_status && !(motion_detected) && (!sound_detected)){
+			motion_detected = pdTRUE;
+			AlertType alert = ALERT_MOTION;
+			BaseType_t queue_status = xQueueSendToBack(alertQueue, &alert, pdMS_TO_TICKS( 100 )); 
+		}
+		vTaskDelay(pdMS_TO_TICKS(100));
+	}
+}
+
+//=== Read Sound  TASK ===
+void vReadSoundSensorask(void *pvParameters){
+	BaseType_t sensor_status; 
+	for(;;){
+		sensor_status = GPIO_PORTD_DATA_R & (1 << 3) ? pdTRUE : pdFALSE;
+		if(sensor_status && (!motion_detected) && (!sound_detected)){
+			sound_detected = pdTRUE;
+			AlertType alert = ALERT_SOUND;
+			BaseType_t queue_status = xQueueSendToBack(alertQueue, &alert, pdMS_TO_TICKS( 100 )); 
+		}
+		vTaskDelay(pdMS_TO_TICKS(100));
+	}
+}
+
+//=== Alert Routine Task
+void vAlertRoutineTask(void *pvParameters){
+	AlertType rec_alert;
+	for(;;){
+		if (xQueueReceive(alertQueue, &rec_alert, portMAX_DELAY)){
+			switch (rec_alert) {
+					case ALERT_MOTION:
+							UART3_OutString("Motion Detected \r\n");
+							break;
+					case ALERT_SOUND:
+							UART3_OutString("Sound Detected  \r\n");
+							break;
+					default:
+							break;
 			}
-			vTaskDelay(2000 / portTICK_PERIOD_MS);  // Send "Home is Safe" every 2s
-    }
+			GPIO_PORTD_DATA_R |= (1<<1);
+			GPIO_PORTF_DATA_R |= (1<<3);
+			vTaskDelay(pdMS_TO_TICKS(5000));
+			motion_detected = pdFALSE;
+			sound_detected = pdFALSE;
+		}
+	}
 }
 
-// Motion Task
-void vMotionDetectedTask(void *pvParameters) {
-    while(1) {
-        if(xSemaphoreTake(xMotionSemaphore, portMAX_DELAY) == pdTRUE) {
-            UART3_OutString("Motion Detected \r\n");
-            GPIO_PORTF_DATA_R |= (1 << 3); // Turn ON Green LED
-            GPIO_PORTD_DATA_R |= (1 << 1); // set PD1 to HIGH for Buzzer
-						motion_detected = 1;
-            vTaskDelay(5000 / portTICK_PERIOD_MS);
-						//GPIOIntEnable(GPIO_PORTD_BASE, GPIO_PIN_2);  // Re-enable
-						motion_detected = 0;
+void vHomeSafeTask(void *pvParameters) {
+    while (1) {
+        if ((!motion_detected) && (!sound_detected)) {
+            UART3_OutString("Home Is Safe\r\n");
+            GPIO_PORTF_DATA_R &= ~(1 << 3);  // Green LED OFF
+            GPIO_PORTD_DATA_R &= ~(1 << 1);  // Buzzer OFF
         }
-        //vTaskDelay(500 / portTICK_PERIOD_MS); // reduce CPU usage
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 
-// Sound Task
-void vSoundDetectedTask(void *pvParameters) {
-    while(1) {
-				UART3_OutString("Sound Detected \r\n");
-        if(xSemaphoreTake(xSoundSemaphore, portMAX_DELAY) == pdTRUE) {
-            
-						UART3_OutString("Sound Detected \r\n");
-            GPIO_PORTF_DATA_R |= (1 << 3); // Turn ON Green LED
-            GPIO_PORTD_DATA_R |= (1 << 1); // set PD1 to HIGH for Buzzer
-            sound_detected = 1;
-            vTaskDelay(5000 / portTICK_PERIOD_MS);
-						//GPIOIntEnable(GPIO_PORTD_BASE, GPIO_PIN_3);  // Re-enable
-						sound_detected = 0;
-				}
-        //vTaskDelay(200 / portTICK_PERIOD_MS); // reduce CPU usage
-    }
-}
-
-// === Combined ISR for Port D ===
-void GPIOD_Handler2(void) {
-    UART3_OutString("DEBUG: Entered GPIOD_Handler\r\n");
-
-    uint32_t status = GPIOD->MIS;  // Read masked interrupt status
-    BaseType_t hpTaskWoken = pdFALSE;
-
-    if (GPIOD->MIS & (1 << 2)) {  // PD2 (PIR)
-        GPIOD->ICR = (1 << 2);  // Clear the interrupt
-        UART3_OutString("DEBUG: Motion Detected\r\n");
-				xSemaphoreGiveFromISR(xMotionSemaphore, &hpTaskWoken);
-				UART3_OutString("DEBUG: seamphooooooooooor\r\n");
-    }
-
-    if (GPIOD->MIS & (1 << 3)) {  // PD3 (Sound)
-        GPIOD->ICR = (1 << 3);  // Clear the interrupt
-        UART3_OutString("DEBUG: Sound Detected\r\n");
-        xSemaphoreGiveFromISR(xSoundSemaphore, &hpTaskWoken);
-				
-    }
-		
-    UART3_OutString("DEBUG: Exiting Handler\r\n");
-		portYIELD_FROM_ISR(hpTaskWoken);
-    
-}
 
 
-void SensorInterruptInit(void) {
-    GPIOPinTypeGPIOInput(GPIO_PORTD_BASE, GPIO_PIN_2 | GPIO_PIN_3);
-    GPIOIntDisable(GPIO_PORTD_BASE, GPIO_PIN_2 | GPIO_PIN_3);
-    GPIOIntClear(GPIO_PORTD_BASE, GPIO_PIN_2 | GPIO_PIN_3);
-    GPIOIntRegister(GPIO_PORTD_BASE, GPIOD_Handler2);
-    GPIOIntTypeSet(GPIO_PORTD_BASE, GPIO_PIN_2 | GPIO_PIN_3, GPIO_RISING_EDGE);
-    GPIOIntEnable(GPIO_PORTD_BASE, GPIO_PIN_2 | GPIO_PIN_3);
-}
