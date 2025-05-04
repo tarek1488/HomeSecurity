@@ -30,12 +30,14 @@ int main(void) {
 	PortD_Init();
 		
 	alertQueue = xQueueCreate(5, sizeof(AlertType)); // Queue of 5 alerts
-    
-	if (alertQueue != NULL) {
+  xBinarySemaphore = xSemaphoreCreateBinary(); 
+	if ((alertQueue != NULL) && xBinarySemaphore !=NULL) {
+		xTaskCreate(vSystemActivationTask,"systm activation",128,NULL,4,NULL);
 		xTaskCreate(vReadMotionSensorask, "Read Motion",128,NULL,3,NULL);
 		xTaskCreate(vReadSoundSensorask, "Read Sound",128,NULL,3,NULL);
 		xTaskCreate(vAlertRoutineTask, "Alert Manager", 128, NULL, 2, NULL);	
 		xTaskCreate(vHomeSafeTask, "HomeSafe", 128, NULL, 1, NULL);
+		UART3_INT_INIT();
 		vTaskStartScheduler();
 	}
 

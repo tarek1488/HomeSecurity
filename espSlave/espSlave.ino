@@ -34,15 +34,11 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 char sharedMessage[32] = "";
 SemaphoreHandle_t msgMutex;
 
-// char Activation[4] = "";
-// SemaphoreHandle_t actMutex;
+char Activation[10] = "";
+SemaphoreHandle_t actMutex;
 
 char door[10] = "";
 SemaphoreHandle_t doorMutex;
-
-// // shared buffer & mutex for uart send to tiva c task and read from firebase
-// char activationValue[32] = "";
-// SemaphoreHandle_t activationMutex;
 
 
 // === Wi-Fi Connect ===
@@ -70,11 +66,6 @@ void FirebaseInit() {
   }
 
   config.token_status_callback = tokenStatusCallback;
-
-  // ✅ Add these lines before Firebase.begin()
-  //config.keepAlive = true;
-  //config.timeout.serverResponse = 10 * 1000; // 10 seconds
-  
   Firebase.begin(&config, &auth);
   Firebase.reconnectWiFi(true);
   delay(100);
@@ -173,57 +164,50 @@ void TaskFirebaseReadDoor(void *pvParameters){
     vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 }
-// // === Task: Read Activation status from Firebase
-// void TaskFirebaseReadActivation(void *pvParameters){
-//   while(1){
-//     if (Firebase.RTDB.getString(&fbdo, "/Activation")) {
-//       String value = fbdo.stringData();
-//       // Determine the character to send
-//       if (value == "ON") {
-//         if (xSemaphoreTake(actMutex, portMAX_DELAY)) {
-//           strncpy(Activation, "A\n", sizeof(Activation));
-//           xSemaphoreGive(actMutex);
-//         }
-//       } else if (value == "OFF") {
-//         if (xSemaphoreTake(actMutex, portMAX_DELAY)) {
-//           strncpy(Activation, "B\n", sizeof(Activation));
-//           xSemaphoreGive(actMutex);
-//         }
-//       }
-//       Serial.print("[Firebase Read Act]: ");
-//       Serial.println(value);
-//     }
-      
-    
-//     vTaskDelay(5000 / portTICK_PERIOD_MS);
-//   }
-// }
 
-// // === Task: Send to Activation to Tiva ===
-// void TaskSendActivation(void *pvParameters) {
-//   char localCopy[4];  // To store the activation value
-//   while (1) {
-//     // Take the mutex to safely copy the shared value
-//     if (xSemaphoreTake(actMutex, portMAX_DELAY)) {
-//       strncpy(localCopy, Activation, sizeof(localCopy));
-//       xSemaphoreGive(actMutex);
-//     }
+// === Task: Read Activation status from Firebase
+void TaskFirebaseReadActivation(void *pvParameters){
+  char activation_buffer[10];
+  while(1){
+    if (Firebase.RTDB.getString(&fbdo, "/Activation")) {
+      String value = fbdo.stringData();
+      value.trim();
+      value.toCharArray(activation_buffer, sizeof(activation_buffer));
+      // Determine the character to send
+      if (xSemaphoreTake(actMutex, portMAX_DELAY)) {
+          strncpy(Activation, activation_buffer, sizeof(Activation));
+          xSemaphoreGive(actMutex);
+        }
+      Serial.print("[Firebase Read Act]: ");
+      Serial.println(value);
+    }         
+    vTaskDelay(5000 / portTICK_PERIOD_MS);
+  }
+}
 
-    
-    
-//     // Always send the activation value
-//     // Only send if the value is "A\n" or "B\n"
-//     if (strcmp(localCopy, "A\n") == 0 || strcmp(localCopy, "B\n") == 0) {
-//       tivacSerial.print(localCopy);  // Send via UART
-//       Serial.print("[UART] Sent Activation: ");
-//       Serial.println(localCopy);    // For debugging
-//     }
-    
-     
-    
-//     vTaskDelay(500 / portTICK_PERIOD_MS);  // Delay before sending again
-//   }
-// }
+
+// === Task: Send to Tiva only if value changed ===
+void TaskSendActivation(void *pvParameters) {
+  char localCopy[10];
+  char lastSentActivation[10] = " ";
+  while (1) {
+    if (xSemaphoreTake(actMutex, portMAX_DELAY)) {
+      strncpy(localCopy, Activation, sizeof(localCopy));
+      xSemaphoreGive(actMutex);
+    }
+
+    // Only send if the value has changed
+    if (strncmp(localCopy, lastSentActivation, sizeof(localCopy)) != 0) {
+      tivacSerial.write(localCopy);  // Send via UART
+      strncpy(lastSentActivation, localCopy, sizeof(lastSentActivation));
+
+      Serial.print("[UART] Sent Activation: ");
+      Serial.println(localCopy);
+    }
+
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+  }
+}
 
 // === Task: Rotate motor based on door status ===
 void TaskControlServo(void *pvParameters) {
@@ -278,7 +262,7 @@ void setup() {
   FirebaseInit();
 
   msgMutex = xSemaphoreCreateMutex();
-  //actMutex = xSemaphoreCreateMutex();
+  actMutex = xSemaphoreCreateMutex();
   doorMutex = xSemaphoreCreateMutex();
 
 
@@ -289,13 +273,11 @@ void setup() {
   xTaskCreatePinnedToCore(TaskLCD, "LCD",   4096, NULL, 2, NULL, 1);
 
   xTaskCreatePinnedToCore(TaskFirebaseReadDoor, "FirebaseRead door", 8192, NULL, 2, NULL, 1);  // Read Firebase task
-  //xTaskCreatePinnedToCore(TaskFirebaseReadActivation, "FirebaseRead Activation", 8192, NULL, 2, NULL, 1);  // Read Firebase task
+  xTaskCreatePinnedToCore(TaskFirebaseReadActivation, "FirebaseRead Activation", 8192, NULL, 2, NULL, 1);  // Read Firebase task
   
-  //xTaskCreatePinnedToCore(TaskSendActivation, "SendActivation", 4096, NULL, 1, NULL, 1);  // Send Activation task
+  xTaskCreatePinnedToCore(TaskSendActivation, "SendActivation", 4096, NULL, 1, NULL, 1);  // Send Activation task
   xTaskCreatePinnedToCore(TaskControlServo, "ControlServo", 4096, NULL, 1, NULL, 1);  // Control LED task
-  // Print the remaining heap memory
-  Serial.print("Remaining heap memory: ");
-  Serial.println(ESP.getFreeHeap());
+  
 }
 
 void loop() {
