@@ -1,13 +1,17 @@
 #include <WiFi.h>
 #include <LiquidCrystal_I2C.h>
-#include <Firebase_ESP_Client.h>
-#include "addons/RTDBHelper.h"
-#include "addons/TokenHelper.h"
+// #include <Firebase_ESP_Client.h>
+// #include "addons/RTDBHelper.h"
+// #include "addons/TokenHelper.h"
+#include <FirebaseClient.h>
 #include <ESP32Servo.h>
 
 // Wi-Fi & Firebase
 #define API_KEY         "AIzaSyAdD1Th2M7EX9F6waL4N0JY3naGUR2IDPg"
 #define DATABASE_URL    "https://homesecurity-dfb93-default-rtdb.firebaseio.com/"
+#define USER_EMAIL "home3@gmail.com"
+#define USER_PASS "12345678"
+
 #define WIFI_SSID       "tarek_EXT"
 #define WIFI_PASSWORD   "Ahmed1488"
 
@@ -21,10 +25,12 @@ Servo MyServo;
 static const int servoPin = 13;
 int angle = 0;
 // Firebase setup
-FirebaseData fbdo;
-FirebaseAuth auth;
-FirebaseConfig config;
-bool signupOK = false;
+// FirebaseData fbdo;
+// FirebaseAuth auth;
+// FirebaseConfig config;
+// bool signupOK = false;
+
+UserAuth user_auth(Web_API_KEY, USER_EMAIL, USER_PASS);
 
 // HardwareSerial
 HardwareSerial tivacSerial(2);
@@ -58,18 +64,25 @@ void FirebaseInit() {
   config.api_key = API_KEY;
   config.database_url = DATABASE_URL;
 
-  if (Firebase.signUp(&config, &auth, "", "")) {
+  // Provide email and password for authentication
+  if (Firebase.signUp(&config, &auth, "home3@gmail.com", "12345678")) {
     Serial.println("Firebase Sign Up: Ok");
     signupOK = true;
   } else {
     Serial.println("Firebase SignUp: Error");
+    Serial.println(config.signer.signupError.message.c_str());
   }
 
+  auth.user.email = "home3@gmail.com";
+  auth.user.password = "12345678";
+
   config.token_status_callback = tokenStatusCallback;
+
   Firebase.begin(&config, &auth);
   Firebase.reconnectWiFi(true);
   delay(100);
 }
+
 
 // === Task: UART Reader ===
 void TaskReadUART(void *pvParameters) {
