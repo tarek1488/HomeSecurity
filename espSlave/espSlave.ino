@@ -1,42 +1,36 @@
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <LiquidCrystal_I2C.h>
-// #include <Firebase_ESP_Client.h>
-// #include "addons/RTDBHelper.h"
-// #include "addons/TokenHelper.h"
 #include <FirebaseClient.h>
 #include <ESP32Servo.h>
 
-// Wi-Fi & Firebase
 #define API_KEY         "AIzaSyAdD1Th2M7EX9F6waL4N0JY3naGUR2IDPg"
 #define DATABASE_URL    "https://homesecurity-dfb93-default-rtdb.firebaseio.com/"
-#define USER_EMAIL "home3@gmail.com"
-#define USER_PASS "12345678"
-
+#define USER_EMAIL      "tarekshalaby2015@gmail.com"
+#define USER_PASS       "t12345678"
 #define WIFI_SSID       "tarek_EXT"
 #define WIFI_PASSWORD   "Ahmed1488"
 
-// Hardware pins
 #define LED             2
 #define RXD2            16
 #define TXD2            17
 
 Servo MyServo;
-
 static const int servoPin = 13;
 int angle = 0;
-// Firebase setup
-// FirebaseData fbdo;
-// FirebaseAuth auth;
-// FirebaseConfig config;
-// bool signupOK = false;
 
-UserAuth user_auth(Web_API_KEY, USER_EMAIL, USER_PASS);
+void processData(AsyncResult &aResult);
 
-// HardwareSerial
+UserAuth user_auth(API_KEY, USER_EMAIL, USER_PASS);
+FirebaseApp app;
+WiFiClientSecure ssl_client;
+using AsyncClient = AsyncClientClass;
+AsyncClient aClient(ssl_client);
+RealtimeDatabase Database;
+
 HardwareSerial tivacSerial(2);
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
-// Shared buffer & mutex for lcd and uart recieve and firebase upload
 char sharedMessage[32] = "";
 SemaphoreHandle_t msgMutex;
 
@@ -46,8 +40,10 @@ SemaphoreHandle_t actMutex;
 char door[10] = "";
 SemaphoreHandle_t doorMutex;
 
+int intValue = 0;
+float floatValue = 0.0f;
+String stringValue = "";
 
-// === Wi-Fi Connect ===
 void ConnectToWiFi() {
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   Serial.print("Connecting to WiFi");
@@ -59,32 +55,17 @@ void ConnectToWiFi() {
   Serial.println(WiFi.localIP());
 }
 
-// === Firebase Init ===
 void FirebaseInit() {
-  config.api_key = API_KEY;
-  config.database_url = DATABASE_URL;
-
-  // Provide email and password for authentication
-  if (Firebase.signUp(&config, &auth, "home3@gmail.com", "12345678")) {
-    Serial.println("Firebase Sign Up: Ok");
-    signupOK = true;
-  } else {
-    Serial.println("Firebase SignUp: Error");
-    Serial.println(config.signer.signupError.message.c_str());
-  }
-
-  auth.user.email = "home3@gmail.com";
-  auth.user.password = "12345678";
-
-  config.token_status_callback = tokenStatusCallback;
-
-  Firebase.begin(&config, &auth);
-  Firebase.reconnectWiFi(true);
-  delay(100);
+  ssl_client.setInsecure();
+  ssl_client.setConnectionTimeout(1000);
+  ssl_client.setHandshakeTimeout(5);
+  initializeApp(aClient, app, getAuth(user_auth), processData, "authTask");
+  app.getApp<RealtimeDatabase>(Database);
+  Database.url(DATABASE_URL);
+  if(app.ready()) Serial.println("Firebase Signup ok");
+  else Serial.println("Firebase Signup Failed");
 }
 
-
-// === Task: UART Reader ===
 void TaskReadUART(void *pvParameters) {
   char buffer[32];
   while (1) {
@@ -97,17 +78,13 @@ void TaskReadUART(void *pvParameters) {
         strncpy(sharedMessage, buffer, sizeof(sharedMessage));
         xSemaphoreGive(msgMutex);
       }
-
       Serial.print("[UART] New message: ");
       Serial.println(buffer);
     }
-    
-    
     vTaskDelay(10 / portTICK_PERIOD_MS);
   }
 }
 
-// === Task: Firebase Upload ===
 void TaskFirebase(void *pvParameters) {
   char localCopy[32];
   char lastSent[32] = "";
@@ -117,23 +94,16 @@ void TaskFirebase(void *pvParameters) {
       xSemaphoreGive(msgMutex);
     }
 
-    if (strcmp(localCopy, lastSent) != 0 && WiFi.status() == WL_CONNECTED) {
-      if (Firebase.RTDB.setString(&fbdo, "/HomeStatus", localCopy)) {
-        Serial.print("[Firebase] Uploaded: ");
-        Serial.println(localCopy);
-        strncpy(lastSent, localCopy, sizeof(lastSent));
-      } else {
-        Serial.println("[Firebase] Upload FAILED");
-        Serial.println(fbdo.errorReason());
-      }
+    if(strcmp(localCopy, lastSent) != 0 && app.ready()){
+      Database.set<String>(aClient, "/HomeStatus", localCopy, processData, "RTDB_Send_String");
+      Serial.print("[Firebase] Uploaded: ");
+      Serial.println(localCopy);
+      strncpy(lastSent, localCopy, sizeof(lastSent));
     }
-    
-
     vTaskDelay(200 / portTICK_PERIOD_MS);
   }
 }
 
-// === Task: LCD Display ===
 void TaskLCD(void *pvParameters) {
   char localCopy[32];
   char lastDisplayed[32] = "";
@@ -146,60 +116,34 @@ void TaskLCD(void *pvParameters) {
     if (strcmp(localCopy, lastDisplayed) != 0) {
       lcd.clear();
       lcd.setCursor(0, 0);
-      lcd.print(String(localCopy).substring(0, 16)); // truncate
+      lcd.print(String(localCopy).substring(0, 16));
       strncpy(lastDisplayed, localCopy, sizeof(lastDisplayed));
-
       digitalWrite(LED, HIGH);
       vTaskDelay(500 / portTICK_PERIOD_MS);
       digitalWrite(LED, LOW);
     }
-    
-
     vTaskDelay(300 / portTICK_PERIOD_MS);
   }
 }
-// === Task: Read door status from Firebase
+
 void TaskFirebaseReadDoor(void *pvParameters){
-  char door_buffer[10] = "";
   while(1){
-    if (Firebase.RTDB.getString(&fbdo, "/Door")) {
-      String value = fbdo.stringData();
-      value.trim();
-      value.toCharArray(door_buffer, sizeof(door_buffer));
-      if (xSemaphoreTake(doorMutex, portMAX_DELAY)) {
-        strncpy(door, door_buffer , sizeof(door));
-        xSemaphoreGive(doorMutex);
-      }
-      Serial.print("[Firebase Read Door]: ");
-      Serial.println(value);
+    if(app.ready()){
+      Database.get(aClient, "/Door", processData, false, "RTDB_GetDoor");
     }
-    
     vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 }
 
-// === Task: Read Activation status from Firebase
 void TaskFirebaseReadActivation(void *pvParameters){
-  char activation_buffer[10];
   while(1){
-    if (Firebase.RTDB.getString(&fbdo, "/Activation")) {
-      String value = fbdo.stringData();
-      value.trim();
-      value.toCharArray(activation_buffer, sizeof(activation_buffer));
-      // Determine the character to send
-      if (xSemaphoreTake(actMutex, portMAX_DELAY)) {
-          strncpy(Activation, activation_buffer, sizeof(Activation));
-          xSemaphoreGive(actMutex);
-        }
-      Serial.print("[Firebase Read Act]: ");
-      Serial.println(value);
-    }         
+    if(app.ready()){
+      Database.get(aClient, "/Activation", processData, false, "RTDB_GetAct");
+    }
     vTaskDelay(5000 / portTICK_PERIOD_MS);
   }
 }
 
-
-// === Task: Send to Tiva only if value changed ===
 void TaskSendActivation(void *pvParameters) {
   char localCopy[10];
   char lastSentActivation[10] = " ";
@@ -209,58 +153,39 @@ void TaskSendActivation(void *pvParameters) {
       xSemaphoreGive(actMutex);
     }
 
-    // Only send if the value has changed
     if (strncmp(localCopy, lastSentActivation, sizeof(localCopy)) != 0) {
-      tivacSerial.write(localCopy);  // Send via UART
+      tivacSerial.write(localCopy);
       strncpy(lastSentActivation, localCopy, sizeof(lastSentActivation));
-
       Serial.print("[UART] Sent Activation: ");
       Serial.println(localCopy);
     }
-
     vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 }
 
-// === Task: Rotate motor based on door status ===
 void TaskControlServo(void *pvParameters) {
   if (!MyServo.attached()) {
     MyServo.attach(servoPin);
-    Serial.println("------------------> Servo not attached");
   }
-  char localCopy[10];  // To store the door status
+  char localCopy[10];
   char lastStatus[10] = "";
   while (1) {
-    // Take the mutex to safely copy the shared door value
     if (xSemaphoreTake(doorMutex, portMAX_DELAY)) {
       strncpy(localCopy, door, sizeof(localCopy));
       xSemaphoreGive(doorMutex);
     }
 
-    // If door status changes, blink LED
-    //if (strcmp(localCopy, lastStatus) != 0) {
     if (strcmp(localCopy, "OPEN") == 0) {
       MyServo.write(0);
-      Serial.println("[LED] Door is OPEN - DOOR OPEN");
     } else if (strcmp(localCopy, "CLOSED") == 0) {
       angle = (angle + 10) % 180;
       MyServo.write(angle);
-      Serial.println("[LED] Door is CLOSED - DOOR CLOSED");
     }
-
-    strncpy(lastStatus, localCopy, sizeof(lastStatus));  // Update last status
-    //}
-    
-    vTaskDelay(400 / portTICK_PERIOD_MS);  // Delay before checking again
+    strncpy(lastStatus, localCopy, sizeof(lastStatus));
+    vTaskDelay(400 / portTICK_PERIOD_MS);
   }
 }
 
-
-
-
-
-
-// === Setup ===
 void setup() {
   Serial.begin(115200);
   MyServo.attach(servoPin);
@@ -278,21 +203,40 @@ void setup() {
   actMutex = xSemaphoreCreateMutex();
   doorMutex = xSemaphoreCreateMutex();
 
-
-  
-  // Core 1 for tasks
   xTaskCreatePinnedToCore(TaskReadUART, "UART", 4096, NULL, 4, NULL, 1);
   xTaskCreatePinnedToCore(TaskFirebase, "Firebase", 8192, NULL, 3, NULL, 1);
-  xTaskCreatePinnedToCore(TaskLCD, "LCD",   4096, NULL, 2, NULL, 1);
-
-  xTaskCreatePinnedToCore(TaskFirebaseReadDoor, "FirebaseRead door", 8192, NULL, 2, NULL, 1);  // Read Firebase task
-  xTaskCreatePinnedToCore(TaskFirebaseReadActivation, "FirebaseRead Activation", 8192, NULL, 2, NULL, 1);  // Read Firebase task
-  
-  xTaskCreatePinnedToCore(TaskSendActivation, "SendActivation", 4096, NULL, 1, NULL, 1);  // Send Activation task
-  xTaskCreatePinnedToCore(TaskControlServo, "ControlServo", 4096, NULL, 1, NULL, 1);  // Control LED task
-  
+  xTaskCreatePinnedToCore(TaskLCD, "LCD", 4096, NULL, 2, NULL, 1);
+  xTaskCreatePinnedToCore(TaskFirebaseReadDoor, "FirebaseReadDoor", 4096, NULL, 2, NULL, 1);
+  xTaskCreatePinnedToCore(TaskFirebaseReadActivation, "FirebaseReadAct", 4096, NULL, 2, NULL, 1);
+  xTaskCreatePinnedToCore(TaskSendActivation, "SendAct", 4096, NULL, 1, NULL, 1);
+  xTaskCreatePinnedToCore(TaskControlServo, "Servo", 4096, NULL, 1, NULL, 1);
 }
 
-void loop() {
-  // Idle
+void loop() {}
+
+void processData(AsyncResult &aResult) {
+  if (!aResult.isResult()) return;
+
+  if (aResult.isEvent()) {
+    Firebase.printf("Event task: %s, msg: %s, code: %d\n", aResult.uid().c_str(), aResult.eventLog().message().c_str(), aResult.eventLog().code());
+  }
+
+  if (aResult.isError()) {
+    Firebase.printf("Error task: %s, msg: %s, code: %d\n", aResult.uid().c_str(), aResult.error().message().c_str(), aResult.error().code());
+  }
+
+  if (aResult.available()) {
+    String payload = aResult.c_str();
+    if (aResult.uid() == "RTDB_GetDoor") {
+      if (xSemaphoreTake(doorMutex, portMAX_DELAY)) {
+        strncpy(door, payload.c_str(), sizeof(door));
+        xSemaphoreGive(doorMutex);
+      }
+    } else if (aResult.uid() == "RTDB_GetAct") {
+      if (xSemaphoreTake(actMutex, portMAX_DELAY)) {
+        strncpy(Activation, payload.c_str(), sizeof(Activation));
+        xSemaphoreGive(actMutex);
+      }
+    }
+  }
 }
