@@ -89,7 +89,13 @@ void TaskReadUART(void *pvParameters) {
         strncpy(sharedMessage, buffer, sizeof(sharedMessage));
         xSemaphoreGive(msgMutex);
       }
-
+      if((strcmp(buffer, "Home Is Safe") != 0) && (strcmp(buffer, "System off") != 0)){// there is an alert
+        MyServo.write(90);
+        Serial.println("[SERVO] Door is CLOSED");
+        if(app.ready()){
+          Database.set<String>(aClient, "/Door", "CLOSED");
+        }
+      }
       Serial.print("[UART] New message: ");
       Serial.println(buffer);
     }
@@ -109,7 +115,7 @@ void TaskFirebase(void *pvParameters) {
       strncpy(localCopy, sharedMessage, sizeof(localCopy));
       xSemaphoreGive(msgMutex);
       } 
-    if (strcmp(localCopy, lastSent) != 0 && WiFi.status() == WL_CONNECTED) {
+    if (strcmp(localCopy, lastSent) != 0) {
       Database.set<String>(aClient, "/HomeStatus", localCopy);
       if (aClient.lastError().code() == 0){
         Serial.print("[Firebase] Uploaded: ");
@@ -201,7 +207,7 @@ void TaskFirebaseReadActivation(void *pvParameters){
 // === Task: Send to Tiva only if value changed ===
 void TaskSendActivation(void *pvParameters) {
   char localCopy[10];
-  char lastSentActivation[10] = " ";
+  char lastSentActivation[10] = "OPEN";
   while (1) {
     if (xSemaphoreTake(actMutex, portMAX_DELAY)) {
       strncpy(localCopy, Activation, sizeof(localCopy));
@@ -223,40 +229,20 @@ void TaskSendActivation(void *pvParameters) {
 
 // === Task: Rotate motor based on door status ===
 void TaskControlServo(void *pvParameters) {
-  if (!MyServo.attached()) {
-    MyServo.attach(servoPin);
-    Serial.println("------------------> Servo not attached");
-  }
-  char localCopy[10];  // To store the door status
-  char lastStatus[10] = "";
+  char localCopy[10];  
   while (1) {
     // Take the mutex to safely copy the shared door value
     if (xSemaphoreTake(doorMutex, portMAX_DELAY)) {
       strncpy(localCopy, door, sizeof(localCopy));
       xSemaphoreGive(doorMutex);
     }
-
-    // If door status changes, blink LED
-    //if (strcmp(localCopy, lastStatus) != 0) {
     if (strcmp(localCopy, "OPEN") == 0) {
       MyServo.write(0);
-      Serial.println("[LED] Door is OPEN - DOOR OPEN");
-    } else if (strcmp(localCopy, "CLOSED") == 0) {
-      angle = (angle + 10) % 180;
-      MyServo.write(angle);
-      Serial.println("[LED] Door is CLOSED - DOOR CLOSED");
-    }
-
-    strncpy(lastStatus, localCopy, sizeof(lastStatus));  // Update last status
-    //}
-    
+      Serial.println("[SERVO] Door is OPEN");
+    }  
     vTaskDelay(400 / portTICK_PERIOD_MS);  // Delay before checking again
   }
 }
-
-
-
-
 
 
 // === Setup ===

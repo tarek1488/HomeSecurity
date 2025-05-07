@@ -87,16 +87,16 @@ void vAlertRoutineTask(void *pvParameters){
 
 void vHomeSafeTask(void *pvParameters) {
     while (1) {
-        if(!homesent){
-					if ((!motion_detected) && (!sound_detected) && (activation)) {
-            UART3_OutString("Home Is Safe\r\n");
-            GPIO_PORTF_DATA_R &= ~(1 << 3);  // Green LED OFF
-            GPIO_PORTD_DATA_R &= ~(1 << 1);  // Buzzer OFF
-						GPIO_PORTF_DATA_R |= (1 << 2);  // Buzzer OFF
-						homesent = pdTRUE;
-					}
+        //if(!homesent){
+				if ((!motion_detected) && (!sound_detected) && (activation)) {
+					UART3_OutString("Home Is Safe\r\n");
+					GPIO_PORTF_DATA_R &= ~(1 << 3);  // Green LED OFF
+					GPIO_PORTD_DATA_R &= ~(1 << 1);  // Buzzer OFF
+					GPIO_PORTF_DATA_R |= (1 << 2);  // Buzzer OFF
+					homesent = pdTRUE;
 				}
-        vTaskDelay(pdMS_TO_TICKS(1000));
+				//}
+        vTaskDelay(pdMS_TO_TICKS(2000));
     }
 }
 
@@ -115,9 +115,10 @@ void vSystemActivationTask(void *pvParameters){
 					//UART3_OutString("Yes I received ON\r\n");
 				activation = pdTRUE;
 			}
-			else{
+			else if(strcmp(msg, "OFF") == 0){
 				//UART3_OutString("DO not recieve on");
 				activation = pdFALSE;
+				UART3_OutString("System off   \r\n");
 			}	
 		}
 	}
