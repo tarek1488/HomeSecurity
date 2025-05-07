@@ -28,6 +28,7 @@ void vReadSoundSensorask(void *pvParameters);
 void vAlertRoutineTask(void *pvParameters);
 void vHomeSafeTask(void *pvParameters);
 void vSystemActivationTask(void *pvParameters);
+//void vSyncTask(void *pvParameters);
 
 
 #endif

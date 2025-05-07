@@ -1,15 +1,10 @@
 #include "mytasks.h"
 
 void PortF_Init(void) {
-    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF);
-    while (!SysCtlPeripheralReady(SYSCTL_PERIPH_GPIOF)) {}
-
-    GPIO_PORTF_LOCK_R = 0x4C4F4344;
-    GPIO_PORTF_CR_R |= 0x1F;
-    GPIO_PORTF_DIR_R |= (1 << 3);    // PF3 output
-    GPIO_PORTF_DIR_R &= ~(1 << 4);   // PF4 input
-    GPIO_PORTF_DEN_R |= 0x18;        // PF3, PF4 digital enable
-    GPIO_PORTF_PUR_R |= (1 << 4);    // PF4 pull-up
+    SYSCTL_RCGCGPIO_R |= 0x20;
+    unsigned long delay = SYSCTL_RCGCGPIO_R;
+		GPIO_PORTF_DEN_R = 0x0E;
+		GPIO_PORTF_DIR_R = 0x0E;
 }
 
 void PortD_Init(void) {

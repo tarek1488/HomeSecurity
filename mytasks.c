@@ -74,10 +74,11 @@ void vAlertRoutineTask(void *pvParameters){
 			}
 			GPIO_PORTD_DATA_R |= (1<<1);
 			GPIO_PORTF_DATA_R |= (1<<3);
-			homesent = pdFALSE;
+			//homesent = pdTRUE;
 			vTaskDelay(pdMS_TO_TICKS(5000));
 			motion_detected = pdFALSE;
 			sound_detected = pdFALSE;
+			homesent = pdFALSE;
 			GPIO_PORTF_DATA_R &= ~(1 << 3);  // Green LED OFF
       GPIO_PORTD_DATA_R &= ~(1 << 1);  // Buzzer OFF
 		}
@@ -91,6 +92,7 @@ void vHomeSafeTask(void *pvParameters) {
             UART3_OutString("Home Is Safe\r\n");
             GPIO_PORTF_DATA_R &= ~(1 << 3);  // Green LED OFF
             GPIO_PORTD_DATA_R &= ~(1 << 1);  // Buzzer OFF
+						GPIO_PORTF_DATA_R |= (1 << 2);  // Buzzer OFF
 						homesent = pdTRUE;
 					}
 				}
@@ -100,30 +102,35 @@ void vHomeSafeTask(void *pvParameters) {
 
 void vSystemActivationTask(void *pvParameters){
 	char msg[32];
-	int i = 0;
 	for(;;){
+		int i = 0;
 		if(xSemaphoreTake(xBinarySemaphore, portMAX_DELAY) == pdPASS){
-			while (UARTCharsAvail(UART3_BASE)){
+			while (UARTCharsAvail(UART3_BASE) &&  i < sizeof(msg) - 1){
 				char c = UARTCharGet(UART3_BASE);
-				if (c == '\r' || c == '\n') continue;  // Skip CR/LF
-				if (i < sizeof(msg) - 1) {
-						msg[i++] = c;
-				}
+				msg[i++] = c;
 		  }
-		msg[i] = '\0';  // Correct null-termination
+			msg[i] = '\0';  // Correct null-termination
 
-		if (strcmp(msg, "ON") == 0) {
-				UART3_OutString("Yes I received ON\r\n");
+			if (strcmp(msg, "ON") == 0) {
+					//UART3_OutString("Yes I received ON\r\n");
+				activation = pdTRUE;
 			}
-		else{
-			
+			else{
+				//UART3_OutString("DO not recieve on");
+				activation = pdFALSE;
+			}	
 		}
-			UART3_OutString("Hello from else\r\n");
-		}
-		
 	}
 }
 
+//void vSyncTask(void *pvParameters){
+//	for(;;){
+//		
+//	
+//	
+//	}
+
+//}
 
 
 
