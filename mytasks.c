@@ -1,7 +1,5 @@
 #include "mytasks.h"
 
-
-
 volatile BaseType_t motion_detected = pdFALSE;
 volatile BaseType_t sound_detected = pdFALSE;
 volatile BaseType_t activation = pdTRUE;

@@ -3,6 +3,7 @@
 #include <WiFiClientSecure.h>
 #include <FirebaseClient.h>
 #include <ESP32Servo.h>
+#include <DFRobotDFPlayerMini.h>
 
 // Wi-Fi & Firebase
 #define API_KEY         "AIzaSyAdD1Th2M7EX9F6waL4N0JY3naGUR2IDPg"
@@ -18,7 +19,12 @@
 #define RXD2            16
 #define TXD2            17
 
+// Define TX and RX pins for UART (change if needed)
+#define TXD1 33
+#define RXD1 32
+
 Servo MyServo;
+Servo MyServo2;
 
 static const int servoPin = 13;
 int angle = 0;
@@ -35,7 +41,16 @@ RealtimeDatabase Database;
 
 // HardwareSerial
 HardwareSerial tivacSerial(2);
+HardwareSerial mp3Serial(1);
 LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+DFRobotDFPlayerMini mp3player;
+#define BUSY_PIN 25
+
+void playHadras() {
+  Serial.println("Playing Hadras (Track 2)");
+  mp3player.play(2);
+}
 
 // Shared buffer & mutex for lcd and uart recieve and firebase upload
 char sharedMessage[32] = "";
@@ -90,6 +105,9 @@ void TaskReadUART(void *pvParameters) {
         xSemaphoreGive(msgMutex);
       }
       if((strcmp(buffer, "Home Is Safe") != 0) && (strcmp(buffer, "System off") != 0)){// there is an alert
+        if(digitalRead(BUSY_PIN) == HIGH){
+          playHadras();
+        }
         MyServo.write(90);
         Serial.println("[SERVO] Door is CLOSED");
         if(app.ready()){
@@ -207,7 +225,7 @@ void TaskFirebaseReadActivation(void *pvParameters){
 // === Task: Send to Tiva only if value changed ===
 void TaskSendActivation(void *pvParameters) {
   char localCopy[10];
-  char lastSentActivation[10] = "OPEN";
+  char lastSentActivation[10] = "";
   while (1) {
     if (xSemaphoreTake(actMutex, portMAX_DELAY)) {
       strncpy(localCopy, Activation, sizeof(localCopy));
@@ -250,6 +268,11 @@ void setup() {
   Serial.begin(115200);
   MyServo.attach(servoPin);
   tivacSerial.begin(9600, SERIAL_8N1, RXD2, TXD2);
+  mp3Serial.begin(9600,SERIAL_8N1, RXD1, TXD1);
+  mp3player.begin(mp3Serial);
+  mp3player.volume(30);
+  pinMode(BUSY_PIN, INPUT);
+  
   pinMode(LED, OUTPUT);
   lcd.init();
   lcd.backlight();
@@ -266,14 +289,14 @@ void setup() {
 
   
   // Core 1 for tasks
-  xTaskCreatePinnedToCore(TaskReadUART, "UART", 4096, NULL, 4, NULL, 1);
+  xTaskCreatePinnedToCore(TaskReadUART, "UART", 8192, NULL, 4, NULL, 1);
   xTaskCreatePinnedToCore(TaskFirebase, "Firebase", 8192, NULL, 3, NULL, 1);
   xTaskCreatePinnedToCore(TaskLCD, "LCD",   4096, NULL, 2, NULL, 1);
 
   xTaskCreatePinnedToCore(TaskFirebaseReadDoor, "FirebaseRead door", 8192, NULL, 2, NULL, 1);  // Read Firebase task
   xTaskCreatePinnedToCore(TaskFirebaseReadActivation, "FirebaseRead Activation", 8192, NULL, 2, NULL, 1);  // Read Firebase task
   
-  xTaskCreatePinnedToCore(TaskSendActivation, "SendActivation", 4096, NULL, 1, NULL, 1);  // Send Activation task
+  xTaskCreatePinnedToCore(TaskSendActivation, "SendActivation", 4096, NULL, 5, NULL, 1);  // Send Activation task
   xTaskCreatePinnedToCore(TaskControlServo, "ControlServo", 4096, NULL, 1, NULL, 1);  // Control LED task
   
 }
