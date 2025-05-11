@@ -6,6 +6,7 @@
 #include <semphr.h>
 #include <task.h>
 #include <timers.h>
+#include "lcd_code.h"
 
 typedef enum {
     ALERT_NONE,

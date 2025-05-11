@@ -1,5 +1,5 @@
 #include "mytasks.h"
-
+#include "lcd_code.h"
 void PortF_Init(void) {
     SYSCTL_RCGCGPIO_R |= 0x20;
     unsigned long delay = SYSCTL_RCGCGPIO_R;
@@ -23,10 +23,13 @@ int main(void) {
 	UART3_Init();
 	PortF_Init();
 	PortD_Init();
-		
+	I2C0_Init();
+	LCD_Init();
 	alertQueue = xQueueCreate(5, sizeof(AlertType)); // Queue of 5 alerts
   xBinarySemaphore = xSemaphoreCreateBinary(); 
+	LCD_SetCursor(0,0);
 	if ((alertQueue != NULL) && xBinarySemaphore !=NULL) {
+		LCD_WriteString("System Ready");
 		xTaskCreate(vSystemActivationTask,"systm activation",128,NULL,4,NULL);
 		xTaskCreate(vReadMotionSensorask, "Read Motion",128,NULL,3,NULL);
 		xTaskCreate(vReadSoundSensorask, "Read Sound",128,NULL,3,NULL);

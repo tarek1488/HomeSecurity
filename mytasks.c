@@ -63,9 +63,13 @@ void vAlertRoutineTask(void *pvParameters){
 			switch (rec_alert) {
 					case ALERT_MOTION:
 							UART3_OutString("Motion Detected \r\n");
+							LCD_Clear();
+							LCD_WriteString("Motion Detected");
 							break;
 					case ALERT_SOUND:
 							UART3_OutString("Sound Detected  \r\n");
+							LCD_Clear();
+							LCD_WriteString("Sound Detected");
 							break;
 					default:
 							break;
@@ -88,6 +92,8 @@ void vHomeSafeTask(void *pvParameters) {
         //if(!homesent){
 				if ((!motion_detected) && (!sound_detected) && (activation)) {
 					UART3_OutString("Home Is Safe\r\n");
+					LCD_Clear();
+					LCD_WriteString("Home Is Safe");
 					GPIO_PORTF_DATA_R &= ~(1 << 3);  // Green LED OFF
 					GPIO_PORTD_DATA_R &= ~(1 << 1);  // Buzzer OFF
 					GPIO_PORTF_DATA_R |= (1 << 2);  // Buzzer OFF
@@ -117,6 +123,8 @@ void vSystemActivationTask(void *pvParameters){
 				//UART3_OutString("DO not recieve on");
 				activation = pdFALSE;
 				UART3_OutString("System off   \r\n");
+				LCD_Clear();
+				LCD_WriteString("System off");
 			}	
 		}
 	}

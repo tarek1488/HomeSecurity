@@ -1,5 +1,5 @@
 #include <WiFi.h>
-#include <LiquidCrystal_I2C.h>
+//#include <LiquidCrystal_I2C.h>
 #include <WiFiClientSecure.h>
 #include <FirebaseClient.h>
 #include <ESP32Servo.h>
@@ -42,7 +42,7 @@ RealtimeDatabase Database;
 // HardwareSerial
 HardwareSerial tivacSerial(2);
 HardwareSerial mp3Serial(1);
-LiquidCrystal_I2C lcd(0x27, 16, 2);
+//LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 DFRobotDFPlayerMini mp3player;
 #define BUSY_PIN 25
@@ -108,7 +108,7 @@ void TaskReadUART(void *pvParameters) {
         if(digitalRead(BUSY_PIN) == HIGH){
           playHadras();
         }
-        MyServo.write(90);
+        MyServo.write(180);
         Serial.println("[SERVO] Door is CLOSED");
         if(app.ready()){
           Database.set<String>(aClient, "/Door", "CLOSED");
@@ -151,25 +151,7 @@ void TaskFirebase(void *pvParameters) {
   }
 }
 
-// === Task: LCD Display ===
-void TaskLCD(void *pvParameters) {
-  char localCopy[32];
-  char lastDisplayed[32] = "";
-  while (1) {
-    if (xSemaphoreTake(msgMutex, portMAX_DELAY)) {
-      strncpy(localCopy, sharedMessage, sizeof(localCopy));
-      xSemaphoreGive(msgMutex);
-    }
 
-    if (strcmp(localCopy, lastDisplayed) != 0) {
-      lcd.clear();
-      lcd.setCursor(0, 0);
-      lcd.print(String(localCopy).substring(0, 16)); // truncate
-      strncpy(lastDisplayed, localCopy, sizeof(lastDisplayed));
-    }
-    vTaskDelay(300 / portTICK_PERIOD_MS);
-  }
-}
 // === Task: Read door status from Firebase
 void TaskFirebaseReadDoor(void *pvParameters){
   char door_buffer[10] = "";
@@ -255,9 +237,9 @@ void TaskControlServo(void *pvParameters) {
       xSemaphoreGive(doorMutex);
     }
     if (strcmp(localCopy, "OPEN") == 0) {
-      MyServo.write(0);
+      MyServo.write(50);
       Serial.println("[SERVO] Door is OPEN");
-    }  
+    } 
     vTaskDelay(400 / portTICK_PERIOD_MS);  // Delay before checking again
   }
 }
@@ -274,11 +256,7 @@ void setup() {
   pinMode(BUSY_PIN, INPUT);
   
   pinMode(LED, OUTPUT);
-  lcd.init();
-  lcd.backlight();
-  lcd.setCursor(0, 0);
-  lcd.print("System is ready");
-
+  
   ConnectToWiFi();
   FirebaseInit();
 
@@ -291,7 +269,7 @@ void setup() {
   // Core 1 for tasks
   xTaskCreatePinnedToCore(TaskReadUART, "UART", 8192, NULL, 4, NULL, 1);
   xTaskCreatePinnedToCore(TaskFirebase, "Firebase", 8192, NULL, 3, NULL, 1);
-  xTaskCreatePinnedToCore(TaskLCD, "LCD",   4096, NULL, 2, NULL, 1);
+  
 
   xTaskCreatePinnedToCore(TaskFirebaseReadDoor, "FirebaseRead door", 8192, NULL, 2, NULL, 1);  // Read Firebase task
   xTaskCreatePinnedToCore(TaskFirebaseReadActivation, "FirebaseRead Activation", 8192, NULL, 2, NULL, 1);  // Read Firebase task
