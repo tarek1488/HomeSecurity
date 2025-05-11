@@ -62,14 +62,16 @@ void vAlertRoutineTask(void *pvParameters){
 		if (xQueueReceive(alertQueue, &rec_alert, portMAX_DELAY)){
 			switch (rec_alert) {
 					case ALERT_MOTION:
-							UART3_OutString("Motion Detected \r\n");
+							UART3_OutString("Motion detected \r\n");
 							LCD_Clear();
-							LCD_WriteString("Motion Detected");
+							LCD_WriteString("Motion detected");
+							DelayMs(15);
 							break;
 					case ALERT_SOUND:
-							UART3_OutString("Sound Detected  \r\n");
+							UART3_OutString("Sound detected  \r\n");
 							LCD_Clear();
-							LCD_WriteString("Sound Detected");
+							LCD_WriteString("Sound detected");
+							DelayMs(15);
 							break;
 					default:
 							break;
@@ -91,9 +93,10 @@ void vHomeSafeTask(void *pvParameters) {
     while (1) {
         //if(!homesent){
 				if ((!motion_detected) && (!sound_detected) && (activation)) {
-					UART3_OutString("Home Is Safe\r\n");
+					UART3_OutString("Home is Safe \r\n");
 					LCD_Clear();
-					LCD_WriteString("Home Is Safe");
+					LCD_WriteString("Home is Safe");
+					DelayMs(15);
 					GPIO_PORTF_DATA_R &= ~(1 << 3);  // Green LED OFF
 					GPIO_PORTD_DATA_R &= ~(1 << 1);  // Buzzer OFF
 					GPIO_PORTF_DATA_R |= (1 << 2);  // Buzzer OFF
@@ -125,16 +128,20 @@ void vSystemActivationTask(void *pvParameters){
 				UART3_OutString("System off   \r\n");
 				LCD_Clear();
 				LCD_WriteString("System off");
-			}	
+				DelayMs(15);
+			}
+//			else if(strcmp(msg, "ACK") == 0){
+//				vTaskDelete(xSyncHandle);
+//				UART3_OutString("done  \r\n");
+//			}
 		}
 	}
 }
 
 //void vSyncTask(void *pvParameters){
 //	for(;;){
-//		
-//	
-//	
+//		UART3_OutString("PING \r\n");
+//		DelayMs(1000);
 //	}
 
 //}

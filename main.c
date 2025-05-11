@@ -29,7 +29,7 @@ int main(void) {
   xBinarySemaphore = xSemaphoreCreateBinary(); 
 	LCD_SetCursor(0,0);
 	if ((alertQueue != NULL) && xBinarySemaphore !=NULL) {
-		LCD_WriteString("System Ready");
+		LCD_Clear();
 		xTaskCreate(vSystemActivationTask,"systm activation",128,NULL,4,NULL);
 		xTaskCreate(vReadMotionSensorask, "Read Motion",128,NULL,3,NULL);
 		xTaskCreate(vReadSoundSensorask, "Read Sound",128,NULL,3,NULL);

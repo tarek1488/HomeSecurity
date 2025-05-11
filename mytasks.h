@@ -16,9 +16,11 @@ typedef enum {
 
 extern QueueHandle_t alertQueue;
 extern SemaphoreHandle_t xBinarySemaphore;
+
 extern volatile BaseType_t motion_detected;
 extern volatile BaseType_t sound_detected;
 extern volatile BaseType_t activation;
+extern volatile BaseType_t homesent;
 
 
 

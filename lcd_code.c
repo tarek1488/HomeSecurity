@@ -116,5 +116,5 @@ void LCD_SetCursor(uint8_t row, uint8_t col)
 
 void LCD_Clear(void) {
     LCD_SendCommand(0x01);
-    DelayMs(2);
+    DelayMs(15);
 }

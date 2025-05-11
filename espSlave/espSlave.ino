@@ -11,7 +11,7 @@
 #define USER_EMAIL "tarekshalaby2015@gmail.com"
 #define USER_PASS "t123456789"
 
-#define WIFI_SSID       "tarek_EXT"
+#define WIFI_SSID       "tarek"
 #define WIFI_PASSWORD   "Ahmed1488"
 
 // Hardware pins
@@ -94,6 +94,7 @@ void FirebaseInit() {
 // === Task: UART Reader ===
 void TaskReadUART(void *pvParameters) {
   char buffer[32];
+  //bool closed_once = false;
   while (1) {
     if (tivacSerial.available()) {
       String input = tivacSerial.readStringUntil('\n');
@@ -104,14 +105,16 @@ void TaskReadUART(void *pvParameters) {
         strncpy(sharedMessage, buffer, sizeof(sharedMessage));
         xSemaphoreGive(msgMutex);
       }
-      if((strcmp(buffer, "Home Is Safe") != 0) && (strcmp(buffer, "System off") != 0)){// there is an alert
+      if((strcmp(buffer, "Sound detected") == 0) || (strcmp(buffer, "Motion detected") == 0)){// there is an alert
         if(digitalRead(BUSY_PIN) == HIGH){
           playHadras();
         }
         MyServo.write(180);
         Serial.println("[SERVO] Door is CLOSED");
-        if(app.ready()){
+        if((app.ready())){
           Database.set<String>(aClient, "/Door", "CLOSED");
+          delay(50);
+          
         }
       }
       Serial.print("[UART] New message: ");
@@ -135,6 +138,7 @@ void TaskFirebase(void *pvParameters) {
       } 
     if (strcmp(localCopy, lastSent) != 0) {
       Database.set<String>(aClient, "/HomeStatus", localCopy);
+      delay(50);
       if (aClient.lastError().code() == 0){
         Serial.print("[Firebase] Uploaded: ");
         Serial.println(localCopy);
@@ -158,6 +162,7 @@ void TaskFirebaseReadDoor(void *pvParameters){
   while(1){
     if(app.ready()){
       String value = Database.get<String>(aClient, "/Door");
+      delay(50);
       if (aClient.lastError().code() == 0){
         value.trim();
         value.toCharArray(door_buffer, sizeof(door_buffer));
@@ -183,6 +188,7 @@ void TaskFirebaseReadActivation(void *pvParameters){
   while(1){
     if(app.ready()){
       String value = Database.get<String>(aClient, "/Activation");
+      delay(50);
       if (aClient.lastError().code() == 0){
         value.trim();
         value.toCharArray(activation_buffer, sizeof(activation_buffer));
@@ -198,7 +204,8 @@ void TaskFirebaseReadActivation(void *pvParameters){
         Firebase.printf("Error, msg: %s, code: %d\n", aClient.lastError().message().c_str(), aClient.lastError().code());
         Serial.println("Firebase read activation failed");
       }
-    }          
+    }
+              
     vTaskDelay(5000 / portTICK_PERIOD_MS);
   }
 }
@@ -239,6 +246,10 @@ void TaskControlServo(void *pvParameters) {
     if (strcmp(localCopy, "OPEN") == 0) {
       MyServo.write(50);
       Serial.println("[SERVO] Door is OPEN");
+    }
+    else if (strcmp(localCopy, "CLOSED") == 0) {
+      MyServo.write(180);
+      Serial.println("[SERVO] Door is CLOSED");
     } 
     vTaskDelay(400 / portTICK_PERIOD_MS);  // Delay before checking again
   }
@@ -274,7 +285,7 @@ void setup() {
   xTaskCreatePinnedToCore(TaskFirebaseReadDoor, "FirebaseRead door", 8192, NULL, 2, NULL, 1);  // Read Firebase task
   xTaskCreatePinnedToCore(TaskFirebaseReadActivation, "FirebaseRead Activation", 8192, NULL, 2, NULL, 1);  // Read Firebase task
   
-  xTaskCreatePinnedToCore(TaskSendActivation, "SendActivation", 4096, NULL, 5, NULL, 1);  // Send Activation task
+  xTaskCreatePinnedToCore(TaskSendActivation, "SendActivation", 4096, NULL, 1, NULL, 1);  // Send Activation task
   xTaskCreatePinnedToCore(TaskControlServo, "ControlServo", 4096, NULL, 1, NULL, 1);  // Control LED task
   
 }
